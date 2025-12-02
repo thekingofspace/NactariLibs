@@ -508,45 +508,49 @@ function BotMethods.Start(self:DiscordBot & Private)
             local Packet = serde.decode("json", raw)
             self.__RST = Packet.s or self.__RST or 0
 
-            if Packet.t == "READY" then
-                self.__SessionID = Packet.d.session_id
-                if Packet.d.resume_gateway_url then
-                    self.__GatewayURL = Packet.d.resume_gateway_url .. "?v=10&encoding=json"
+            task.spawn(function()
+                if Packet.t == "READY" then
+                    self.__SessionID = Packet.d.session_id
+                    if Packet.d.resume_gateway_url then
+                        self.__GatewayURL = Packet.d.resume_gateway_url .. "?v=10&encoding=json"
+                    end
                 end
-            end
 
-            if Packet.op == 7 then
-                self:__Resume()
-                continue
-            end
-
-            if Packet.op == 9 then
-                task.wait(1)
-
-                if Packet.d == true then
+                if Packet.op == 7 then
                     self:__Resume()
-                else
-                    self:__Identify()
-                end
-            end
-
-            if Packet.t then
-                local ev = Packet.t:lower()
-                local chain = self.__ConnectedEvents[ev]
-
-                if chain then
-                    self:__SpawnChain(chain, Packet.d, ev)
-                elseif self.__ConnectedEvents["undefined"] then
-                    self:__SpawnChain(self.__ConnectedEvents["undefined"], Packet.d, ev)
+                    return
                 end
 
-                local stepChain = self.__ConnectedEvents["signal_step"]
-                if stepChain then
-                    task.spawn(function()
-                        stepChain:Run()
-                    end)
+                if Packet.op == 9 then
+                    task.wait(1)
+
+                    if Packet.d == true then
+                        self:__Resume()
+                    else
+                        self:__Identify()
+                    end
+
+                    return
                 end
-            end
+
+                if Packet.t then
+                    local ev = Packet.t:lower()
+                    local chain = self.__ConnectedEvents[ev]
+
+                    if chain then
+                        self:__SpawnChain(chain, Packet.d, ev)
+                    elseif self.__ConnectedEvents["undefined"] then
+                        self:__SpawnChain(self.__ConnectedEvents["undefined"], Packet.d, ev)
+                    end
+
+                    local stepChain = self.__ConnectedEvents["signal_step"]
+                    if stepChain then
+                        task.spawn(function()
+                            stepChain:Run()
+                        end)
+                    end
+                end
+            end)
         end
     end))
 
