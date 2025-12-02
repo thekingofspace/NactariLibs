@@ -515,8 +515,14 @@ function BotMethods.Start(self:DiscordBot & Private)
                 end
             end
 
+            if Packet.op == 7 then
+                self:__Resume()
+                continue
+            end
+
             if Packet.op == 9 then
                 task.wait(1)
+
                 if Packet.d == true then
                     self:__Resume()
                 else
