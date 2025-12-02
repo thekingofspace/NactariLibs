@@ -509,13 +509,6 @@ function BotMethods.Start(self:DiscordBot & Private)
             self.__RST = Packet.s or self.__RST or 0
 
             task.spawn(function()
-                if Packet.t == "READY" then
-                    self.__SessionID = Packet.d.session_id
-                    if Packet.d.resume_gateway_url then
-                        self.__GatewayURL = Packet.d.resume_gateway_url .. "?v=10&encoding=json"
-                    end
-                end
-
                 if Packet.op == 7 then
                     self:__Resume()
                     return
@@ -533,7 +526,14 @@ function BotMethods.Start(self:DiscordBot & Private)
                     return
                 end
 
-                if Packet.t then
+                if Packet.op == 0 and Packet.t then
+                    if Packet.t == "READY" then
+                        self.__SessionID = Packet.d.session_id
+                        if Packet.d.resume_gateway_url then
+                            self.__GatewayURL = Packet.d.resume_gateway_url .. "?v=10&encoding=json"
+                        end
+                    end
+                    
                     local ev = Packet.t:lower()
                     local chain = self.__ConnectedEvents[ev]
 
