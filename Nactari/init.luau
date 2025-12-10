@@ -648,30 +648,6 @@ function BotMethods.Start(self:DiscordBot & Private)
     return self
 end
 
-
-function BotMethods.__LoadGatewayBotInfo(self)
-    local res = net.request({
-        url = EndPoint .. "/gateway/bot",
-        method = "GET",
-        headers = {
-            ["Authorization"] = "Bot " .. self.Token
-        }
-    })
-
-    if res.statusCode > 400 then
-        error("Failed to get gateway bot info: " .. res.body)
-    end
-
-    local json = serde.decode("json", res.body)
-
-    self.__GatewayURL = json.url .. "?v=10&encoding=json"
-    self.__RecommendedShards = json.shards
-    self.__SessionLimits = json.session_start_limit
-    self.__MaxConcurrency = json.session_start_limit.max_concurrency
-
-    return json
-end
-
 function BotMethods.__SpawnChain(self:DiscordBot & Private, Chain, ...)
     table.insert(self.__ChainsToRun, {Chain, {...}}::any)
 end
