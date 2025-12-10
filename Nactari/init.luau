@@ -344,6 +344,9 @@ export type Private = {
     __ShardList:{DiscordBot};
     __ChainsToRun:{Chain};
     __ActiveChainThreads:{};
+    __RecommendedShards:number;
+    __SessionLimits:number;
+    __MaxConcurrency:number;
 
     ShardID: number;
     ShardCount: number;
@@ -482,10 +485,33 @@ end
 
 function BotMethods.Start(self:DiscordBot & Private)
     if self.__Started then return end
+
     if self:Grab("Start") then
         (self:Grab("Start")::Chain):Run()
     end
+
     self.__Started = true
+
+    local gatewayInfo = net.request({
+        url = EndPoint .. "/gateway/bot",
+        method = "GET",
+        headers = { ["Authorization"] = "Bot " .. self.Token }
+    })
+
+    if gatewayInfo.statusCode > 400 then
+        error("[Gateway Error] Failed /gateway/bot → " .. tostring(gatewayInfo.body))
+    end
+
+    local info = serde.decode("json", gatewayInfo.body)
+
+    self.__GatewayURL = info.url .. "?v=10&encoding=json"
+    self.__RecommendedShards = info.shards
+    self.__SessionLimits = info.session_start_limit
+    self.__MaxConcurrency = info.session_start_limit.max_concurrency
+
+    if self.ShardCount % self.__RecommendedShards ~= 0 then
+        self.ShardCount = self.__RecommendedShards
+    end
 
     local url = self.__GatewayURL or GatewayURL
     local Gateway = net.socket(url)
@@ -509,6 +535,22 @@ function BotMethods.Start(self:DiscordBot & Private)
             self.__RST = Packet.s or self.__RST or 0
 
             task.spawn(function()
+                if Packet.close == 4010 then
+
+                    local updated = net.request({
+                        url = EndPoint .. "/gateway/bot",
+                        method = "GET",
+                        headers = { ["Authorization"] = "Bot " .. self.Token }
+                    })
+
+                    local newInfo = serde.decode("json", updated.body)
+                    self.ShardCount = newInfo.shards
+
+                    task.wait(2)
+                    self:__Identify()
+                    return
+                end
+
                 if Packet.op == 7 then
                     self:__Resume()
                     return
@@ -529,11 +571,12 @@ function BotMethods.Start(self:DiscordBot & Private)
                 if Packet.op == 0 and Packet.t then
                     if Packet.t == "READY" then
                         self.__SessionID = Packet.d.session_id
+
                         if Packet.d.resume_gateway_url then
                             self.__GatewayURL = Packet.d.resume_gateway_url .. "?v=10&encoding=json"
                         end
                     end
-                    
+
                     local ev = Packet.t:lower()
                     local chain = self.__ConnectedEvents[ev]
 
@@ -574,7 +617,7 @@ function BotMethods.Start(self:DiscordBot & Private)
 
     local InitialPacket = self:SendContext("GET", "applications/@me")
     self.AppID = InitialPacket.id
-
+    InitialPacket = nil
     self.__ProccessorTask = task.spawn(function()
         while true do
             task.wait()
@@ -589,11 +632,9 @@ function BotMethods.Start(self:DiscordBot & Private)
 
                 task.spawn(function()
                     task.wait()
-
                     while coroutine.status(thread) ~= "dead" do
                         task.wait()
                     end
-
                     self.__ActiveChainThreads[thread] = nil
                 end)
             end
@@ -605,6 +646,30 @@ function BotMethods.Start(self:DiscordBot & Private)
     end
 
     return self
+end
+
+
+function BotMethods.__LoadGatewayBotInfo(self)
+    local res = net.request({
+        url = EndPoint .. "/gateway/bot",
+        method = "GET",
+        headers = {
+            ["Authorization"] = "Bot " .. self.Token
+        }
+    })
+
+    if res.statusCode > 400 then
+        error("Failed to get gateway bot info: " .. res.body)
+    end
+
+    local json = serde.decode("json", res.body)
+
+    self.__GatewayURL = json.url .. "?v=10&encoding=json"
+    self.__RecommendedShards = json.shards
+    self.__SessionLimits = json.session_start_limit
+    self.__MaxConcurrency = json.session_start_limit.max_concurrency
+
+    return json
 end
 
 function BotMethods.__SpawnChain(self:DiscordBot & Private, Chain, ...)
