@@ -409,7 +409,7 @@ end
 
 function BotMethods.SendSocket(self, Packet)
     if self.__Started and self.__Gateway then
-        self.__Gateway:send(serde.encode(Packet))
+        self.__Gateway:send(serde.encode("json", Packet))
 
         if self:Grab("socket_send") then
             task.spawn(function()
