@@ -347,6 +347,7 @@ export type Private = {
     __RecommendedShards:number;
     __SessionLimits:number;
     __MaxConcurrency:number;
+    __Yielded:boolean;
 
     ShardID: number;
     ShardCount: number;
@@ -632,6 +633,11 @@ function BotMethods.Start(self:DiscordBot & Private)
                     self.__ActiveChainThreads[thread] = nil
                 end)
             end
+
+            if #self.__ChainsToRun == 0 then
+                self.__Yielded = true
+                coroutine.yield()
+            end
         end
     end)
 
@@ -644,6 +650,10 @@ end
 
 function BotMethods.__SpawnChain(self:DiscordBot & Private, Chain, ...)
     table.insert(self.__ChainsToRun, {Chain, {...}}::any)
+
+    if self.__Yielded == true and self.__ProccessorTask then
+        coroutine.resume(self.__ProccessorTask)
+    end
 end
 
 function BotMethods.Stop(self:DiscordBot & Private)
@@ -718,6 +728,7 @@ function module.New(Intents:number, Token:string, ShardID:number?, ShardCount:nu
         __RST = 0;
         __ChainsToRun = {};
         __ActiveChainThreads = {};
+        __Yielded = false;
 
         __ShardList = {};
     }, Methods)
