@@ -412,9 +412,7 @@ function BotMethods.SendSocket(self, Packet)
         self.__Gateway:send(serde.encode("json", Packet))
 
         if self:Grab("socket_send") then
-            task.spawn(function()
-                self:Grab("socket_send"):Run()
-            end)
+            self:__SpawnChain(self:Grab("socket_send"))
         end
     end
     return self
@@ -458,9 +456,7 @@ function BotMethods.SendContext(self, Method, Path, Body, Headers)
     end)
 
     if self:Grab("rest_send") then
-        task.spawn(function()
-            self:Grab("rest_send"):Run(ok and decoded or ReturnPack.body)
-        end)
+        self:__SpawnChain(self:Grab("rest_send"), ok and decoded or ReturnPack.body)
     end
 
     return ok and decoded or ReturnPack.body
@@ -477,7 +473,7 @@ function BotMethods.__Resume(self)
         }
     }))
 
-    local chain = self.__ConnectedEvents["resume"]
+    local chain = self:Grab("resume")
     if chain then
         self:__SpawnChain(chain)
     end
@@ -487,7 +483,7 @@ function BotMethods.Start(self:DiscordBot & Private)
     if self.__Started then return end
 
     if self:Grab("Start") then
-        (self:Grab("Start")::Chain):Run()
+        self:__SpawnChain(self:Grab("start"))
     end
 
     self.__Started = true
@@ -578,19 +574,17 @@ function BotMethods.Start(self:DiscordBot & Private)
                     end
 
                     local ev = Packet.t:lower()
-                    local chain = self.__ConnectedEvents[ev]
+                    local chain = self:Grab(ev)
 
                     if chain then
                         self:__SpawnChain(chain, Packet.d, ev)
-                    elseif self.__ConnectedEvents["undefined"] then
-                        self:__SpawnChain(self.__ConnectedEvents["undefined"], Packet.d, ev)
+                    elseif self:Grab("Undefined") then
+                        self:__SpawnChain(self:Grab("Undefined"), Packet.d, ev)
                     end
 
-                    local stepChain = self.__ConnectedEvents["signal_step"]
+                    local stepChain = self:Grab("signal_step")
                     if stepChain then
-                        task.spawn(function()
-                            stepChain:Run()
-                        end)
+                        self:__SpawnChain(self:Grab("signal_step"))
                     end
                 end
             end)
@@ -608,7 +602,7 @@ function BotMethods.Start(self:DiscordBot & Private)
                 d = self.__RST or 0;
             }))
 
-            local chain = self.__ConnectedEvents["heartbeat"]
+            local chain = self:Grab("Heartbeat")
             if chain then
                 self:__SpawnChain(chain, os.time())
             end
@@ -642,7 +636,7 @@ function BotMethods.Start(self:DiscordBot & Private)
     end)
 
     if self:Grab("Started") then
-        (self:Grab("Started")::Chain):Run()
+        self:__SpawnChain(self:Grab("started"))
     end
 
     return self
@@ -654,7 +648,7 @@ end
 
 function BotMethods.Stop(self:DiscordBot & Private)
     if self:Grab("Stop") then
-        (self:Grab("Stop")::Chain):Run()
+        self:__SpawnChain(self:Grab("Stop"))
     end
 
     for _, t in ipairs(self.__Tasks) do
@@ -675,7 +669,7 @@ function BotMethods.Stop(self:DiscordBot & Private)
     self.__Started = false
 
     if self:Grab("Stopped") then
-        (self:Grab("Stopped")::Chain):Run()
+        self:__SpawnChain(self:Grab("stopped"))
     end
 end
 
